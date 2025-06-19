@@ -15,6 +15,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// 编译先在终端cd到目录再用go build -o beep-detector.exe
+
 const (
 	// 音频参数
 	SAMPLE_RATE     = 44100 // 采样率
@@ -23,13 +25,12 @@ const (
 	BUFFER_SIZE     = 2048  // 缓冲区大小
 
 	// 检测参数
-	TARGET_FREQ_1 = 2620 // 主频率 2.62kHz
-	TARGET_FREQ_2 = 5240 // 次频率 5.24kHz
-	//FREQ_TOLERANCE    = 100  // 频率容差 ±100Hz
-	BEEP_DURATION     = 320 // 蜂鸣声持续时间 375ms
-	ENERGY_THRESHOLD  = 5   // 归一化能量阈值，需要根据实际情况调整
-	TRIGGER_THRESHOLD = 3   // 连续达此帧数后触发
-	HARMONIC_RATIO    = 0.1 //次频率触发倍率
+	TARGET_FREQ_1     = 2620 // 主频率 2.62kHz
+	TARGET_FREQ_2     = 5240 // 次频率 5.24kHz
+	BEEP_DURATION     = 320  // 蜂鸣声持续时间 375ms
+	ENERGY_THRESHOLD  = 5    // 归一化能量阈值，需要根据实际情况调整
+	TRIGGER_THRESHOLD = 3    // 连续达此帧数后触发
+	HARMONIC_RATIO    = 0.1  //次频率触发倍率
 
 	// UDP上报
 	UDP_PORT = "127.0.0.1:25562"
@@ -202,16 +203,6 @@ func (bd *BeepDetector) detectBeep(audioData []byte) bool {
 }
 
 // 发送UDP消息
-func (bd *BeepDetector) sendUDPMessage(message string) {
-	_, err := bd.udpConn.Write([]byte(message))
-	if err != nil {
-		log.Printf("发送UDP消息失败: %v", err)
-	} else {
-		log.Printf("已发送UDP消息: %s", message)
-	}
-}
-
-// 调用这个替代原先的 sendUDPMessage(message string)
 func (bd *BeepDetector) sendBinaryUDPMessage(code int16, duration *time.Duration, timestamp *time.Time) {
 	buf := make([]byte, 0, 14)
 
@@ -290,9 +281,6 @@ func (bd *BeepDetector) processAudioNew(audioData []byte) {
 			triggerMinTime := (expectedDuration * 5 / 10) - bd.bufferDuration
 			// 检查持续时间是否符合预期（允许一定误差）
 			if duration >= triggerMinTime && duration <= triggerMaxTime {
-				/*message := fmt.Sprintf("BEEP_DETECTED|TIME:%s|DURATION:%dms",
-				bd.triggerTime.Format("2006-01-02 15:04:05.000"),
-				duration.Milliseconds())*/
 				bd.sendBinaryUDPMessage(5, &duration, &bd.triggerTime) //发送蜂鸣消息
 				log.Printf("蜂鸣声检测完成: 持续时间 %dms", duration.Milliseconds())
 			} else {
