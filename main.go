@@ -21,16 +21,16 @@ const (
 	// 音频参数
 	SAMPLE_RATE     = 44100 // 采样率
 	CHANNELS        = 1     // 单声道
-	BITS_PER_SAMPLE = 16    // 16位采样
+	BITS_PER_SAMPLE = 16    // 位深度
 	BUFFER_SIZE     = 2048  // 缓冲区大小
 
 	// 检测参数
-	TARGET_FREQ_1     = 2620 // 主频率 2.62kHz
-	TARGET_FREQ_2     = 5240 // 次频率 5.24kHz
-	BEEP_DURATION     = 320  // 蜂鸣声持续时间 375ms
-	ENERGY_THRESHOLD  = 5    // 归一化能量阈值，需要根据实际情况调整
-	TRIGGER_THRESHOLD = 3    // 连续达此帧数后触发
-	HARMONIC_RATIO    = 0.1  //次频率触发倍率
+	TARGET_FREQ_1     = 2620 // 主频率
+	TARGET_FREQ_2     = 5240 // 次频率
+	BEEP_DURATION     = 325  // 蜂鸣声持续时间
+	ENERGY_THRESHOLD  = 3    // 归一化触发能量阈值
+	TRIGGER_THRESHOLD = 3    // 连续几帧以触发判定（防抖）
+	HARMONIC_RATIO    = 0.1  // 次频率触发倍率
 
 	// UDP上报
 	UDP_PORT = "127.0.0.1:25562"
@@ -82,21 +82,18 @@ type WAVEHDR struct {
 }
 
 type BeepDetector struct {
-	udpConn *net.UDPConn
-	//lastBeepTime  time.Time
-	isBeeping bool
-	//beepStartTime time.Time
-	hWaveIn uintptr
-	buffer1 []byte
-	buffer2 []byte
-	header1 WAVEHDR
-	header2 WAVEHDR
-	//currentBuffer  int
-	bufferDuration time.Duration // 新增：每个缓冲区的时长
-	triggerCount   int           // 新增：触发计数
-	silenceCount   int           // 新增：静默计数
-	triggerTime    time.Time     // 新增：首次触发时间
-	endTime        time.Time     // 新增：结束触发时间
+	udpConn        *net.UDPConn
+	isBeeping      bool
+	hWaveIn        uintptr
+	buffer1        []byte
+	buffer2        []byte
+	header1        WAVEHDR
+	header2        WAVEHDR
+	bufferDuration time.Duration // 缓冲区时长
+	triggerCount   int           // 触发计数
+	silenceCount   int           // 静默计数
+	triggerTime    time.Time     // 首次触发时间
+	endTime        time.Time     // 结束触发时间
 }
 
 func NewBeepDetector() (*BeepDetector, error) {
@@ -194,12 +191,13 @@ func (bd *BeepDetector) detectBeep(audioData []byte) bool {
 		energy2 /= totalEnergy
 	}
 
+	beepstate := (energy1 > ENERGY_THRESHOLD && energy2 > ENERGY_THRESHOLD*HARMONIC_RATIO)
 	// 调试输出
-	if bd.isBeeping {
+	if beepstate || bd.isBeeping {
 		log.Printf("energy1: %.6f, energy2: %.6f, total: %.2f, bufferDuration: %s", energy1, energy2, totalEnergy, bd.bufferDuration)
 	}
 	// 检测逻辑：主频率能量要足够大，且次频率也要有一定能量
-	return energy1 > ENERGY_THRESHOLD && energy2 > ENERGY_THRESHOLD*HARMONIC_RATIO
+	return beepstate
 }
 
 // 发送UDP消息
